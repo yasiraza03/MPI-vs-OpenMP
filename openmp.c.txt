@@ -1,0 +1,111 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <omp.h>
+
+double func(double x) 
+{
+    // function to integrate
+    return x * x;  // any eq here
+}
+
+double trapezoidalRule(double a, double b, int n) 
+{
+    double h = (b - a) / n;
+    double result = 0.0;
+
+    // Parallelize the loop using OpenMP
+    #pragma omp parallel for reduction(+:result)
+    for (int i = 0; i <= n; ++i) 
+    {
+        double x = a + i * h;
+        double fx = func(x);
+
+        if (i == 0 || i == n) 
+        {
+            result += fx / 2.0;
+        } 
+        
+        else 
+        {
+            result += fx;
+        }
+    }
+
+    result *= h;
+    return result;
+}
+
+double simpsonsRule(double a, double b, int n) 
+{
+    double h = (b - a) / n;
+    double result = func(a) + func(b);
+
+    // Parallelize the loop using OpenMP
+    #pragma omp parallel for reduction(+:result)
+    for (int i = 1; i < n; i += 2) 
+    {
+        double x = a + i * h;
+        result += 4.0 * func(x);
+    }
+
+    // Parallelize the loop using OpenMP
+    #pragma omp parallel for reduction(+:result)
+    for (int i = 2; i < n - 1; i += 2) 
+    {
+        double x = a + i * h;
+        result += 2.0 * func(x);
+    }
+
+    result *= h / 3.0;
+    return result;
+}
+
+int main() 
+{
+    int choice;
+    double a, b;
+    int n;
+
+    printf("Enter the start of the interval: ");
+    scanf("%lf", &a);
+
+    printf("Enter the end of the interval: ");
+    scanf("%lf", &b);
+
+    printf("Enter the number of intervals: ");
+    scanf("%d", &n);
+
+    printf("\nChoose the method:\n");
+    printf("1. Trapezoidal Rule\n");
+    printf("2. Simpson's Rule\n");
+    printf("\nEnter your choice (1 or 2): ");
+    scanf("%d", &choice);
+
+    double startTime = omp_get_wtime();  // Record start time
+    double area;
+
+    if (choice == 1) 
+    {
+        area = trapezoidalRule(a, b, n);
+    } 
+    
+    else if (choice == 2) 
+    {
+        area = simpsonsRule(a, b, n);
+    } 
+    
+    else 
+    {
+        printf("Invalid choice\n");
+        return 1;
+    }
+
+    double endTime = omp_get_wtime();  // Record end time
+
+    // Output the result and execution time
+    printf("\nArea under the curve: %lf\n", area);
+    printf("Execution time: %lf seconds\n", endTime - startTime);
+
+    return 0;
+}

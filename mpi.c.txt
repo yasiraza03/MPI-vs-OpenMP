@@ -1,0 +1,143 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <mpi.h>
+
+// Function to integrate
+double function(double x) 
+{
+    return x * x; // any eq here
+}
+
+// Trapezoidal rule for numerical integration
+double trapezoidalRule(double a, double b, int n, double h) 
+{
+    double integral = 0.0;
+    double x;
+
+    for (int i = 1; i < n; i++) 
+    {
+        x = a + i * h;
+        integral += function(x);
+    }
+
+    integral += 0.5 * (function(a) + function(b));
+    integral *= h;
+
+    return integral;
+}
+
+// Simpson's rule for numerical integration
+double simpsonsRule(double a, double b, int n, double h) 
+{
+    double integral = 0.0;
+    double x;
+
+    for (int i = 1; i < n; i++) 
+    {
+        x = a + i * h;
+
+        if (i % 2 == 0) 
+        {
+            integral += 2.0 * function(x);
+        } 
+        
+        else 
+        {
+            integral += 4.0 * function(x);
+        }
+    }
+
+    integral += function(a) + function(b);
+    integral *= h / 3.0;
+
+    return integral;
+}
+
+int main(int argc, char** argv) 
+{
+    MPI_Init(&argc, &argv);
+
+    int rank, num_procs;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+
+    double a, b;
+    int n;
+
+    if (rank == 0) 
+    {
+        printf("Enter the start of the interval: ");
+        scanf("%lf", &a);
+
+        printf("Enter the end of the interval: ");
+        scanf("%lf", &b);
+
+        printf("Enter the number of subintervals: ");
+        scanf("%d", &n);
+    }
+
+    // Broadcast user inputs to all processes
+    MPI_Bcast(&a, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&b, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    double h = (b - a) / n; // Width of each subinterval
+    double start_time, end_time;
+
+    if (rank == 0) 
+    {
+        start_time = MPI_Wtime(); // Record start time only on the root process
+    }
+
+    // Calculate the local integral for each process
+    int local_n = n / num_procs;
+    double local_a = a + rank * local_n * h;
+    double local_b = local_a + local_n * h;
+    double local_integral;
+
+    // Choose the method based on a user prompt
+    int choice;
+    if (rank == 0) 
+    {
+        printf("\nChoose the method:\n");
+        printf("1. Trapezoidal Rule\n");
+        printf("2. Simpson's Rule\n");
+        printf("\nEnter your choice (1 or 2): ");
+        scanf("%d", &choice);
+    }
+
+    // Broadcast user's choice to all processes
+    MPI_Bcast(&choice, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (choice == 1) 
+    {
+        local_integral = trapezoidalRule(local_a, local_b, local_n, h);
+    } 
+    else if (choice == 2) 
+    {
+        local_integral = simpsonsRule(local_a, local_b, local_n, h);
+    } 
+    else 
+    {
+        if (rank == 0) 
+        {
+            printf("Invalid choice\n");
+        }
+        MPI_Finalize();
+        return 1;
+    }
+
+    // Reduce local integrals to obtain the global integral
+    double global_integral;
+    MPI_Reduce(&local_integral, &global_integral, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    if (rank == 0) 
+    {
+        end_time = MPI_Wtime(); // Record end time only on the root process
+        printf("\nEstimated Integral: %lf\n", global_integral);
+        printf("Execution time: %lf seconds\n", end_time - start_time);
+    }
+
+    MPI_Finalize();
+    return 0;
+}
